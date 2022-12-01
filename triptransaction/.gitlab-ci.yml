@@ -1,0 +1,59 @@
+image: registry.gitlab.com/getsote/infrastructure/base-ci-image:stable
+
+services:
+  - docker:19.03.5-dind
+
+variables:
+  AWS_REGION: eu-west-1
+  AWS_DEFAULT_REGION: ${AWS_REGION}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+  DOCKER_IMAGE_REPO: 950742359761.dkr.ecr.eu-west-1.amazonaws.com/trip-transaction
+  IMAGE_VERSION: ${CI_COMMIT_SHA}
+  XDEBUG_ENABLED: 0
+
+stages:
+  - test
+  - deploy
+
+before_script:
+  - eval "$(ssh-agent -s)"
+  - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+  - mkdir -p ~/.ssh
+  - chmod  700 ~/.ssh
+  - ssh-keyscan -H gitlab.com >> ~/.ssh/known_hosts
+  - export PATH=$PATH:/usr/local/bin
+  - git config --global user.name "Sote CI"
+  - git config --global user.email "ci@getsote.com"
+  - eval $(aws ecr get-login --no-include-email) 2>/dev/null
+
+Deploy to staging:
+  stage: deploy
+  only:
+    - /^staging-.*$/i
+  script:
+    - export BUILD_TYPE=staging
+    - chmod +x _ci/deploy.sh
+    - _ci/deploy.sh
+
+Deploy to demo:
+  stage: deploy
+  only:
+    - /^demo-.*$/i
+  except:
+    - branches
+  script:
+    - export BUILD_TYPE=demo
+    - chmod +x _ci/deploy.sh
+    - _ci/deploy.sh
+
+Deploy to production:
+  stage: deploy
+  only:
+    - /^production-.*$/i
+  except:
+    - branches
+  script:
+    - export BUILD_TYPE=production
+    - chmod +x _ci/deploy.sh
+    - _ci/deploy.sh
